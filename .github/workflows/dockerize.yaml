@@ -1,0 +1,38 @@
+on:
+  push:
+
+permissions:
+  checks: write
+  statuses: write
+  contents: write
+  actions: write
+  packages: write
+  attestations: write
+
+jobs:
+  dockerize:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: setup golang
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: go.mod
+      - name: Generate GitHub App Token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.BOT_PEM }}
+          owner: apexsudo
+          permission-packages: write
+          permission-organization-packages: write
+
+      - name: Docker login to GHCR
+        run: echo "${{ steps.generate-token.outputs.token }}" | docker login ghcr.io -u temp-apex-sudo --password-stdin
+      - name: Create SHORT_SHA for tagging
+        run: echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+      - name: Docker Build & Push
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}:pull-request-${{ github.event.pull_request.number }}-${SHORT_SHA} .
+          docker push ghcr.io/${{ github.repository }}:pull-request-${{ github.event.pull_request.number }}-${SHORT_SHA}
